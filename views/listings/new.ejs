@@ -1,0 +1,246 @@
+<% layout("/layouts/boilerplate") %>
+<div class="row mt-3">
+  <div class="col-8 offset-2">
+    <h2>Create a new Listing</h2>
+    <br /><br />
+    <form
+      method="POST"
+      action="/listings"
+      enctype="multipart/form-data"
+      novalidate
+      class="needs-validation"
+    >
+      <div class="mb-3">
+        <label for="title" class="form-label">Title</label>
+        <input
+          name="listing[title]"
+          placeholder="Add a catchy Title"
+          type="text"
+          class="form-control"
+          required
+        />
+        <div class="valid-feedback">Title looks good!</div>
+        <div class="invalid-feedback">Please enter Title</div>
+      </div>
+      <div class="mb-3">
+        <label for="description" class="form-label">Description</label>
+        <textarea
+          name="listing[description]"
+          class="form-control"
+          required
+        ></textarea>
+        <div class="invalid-feedback">Please enter a short description</div>
+      </div>
+      <div class="mb-3">
+        <label for="image" class="form-label">Image Link (optional)</label>
+        <input
+          name="listing[image]"
+          placeholder="enter image URL/LINK"
+          type="text"
+          class="form-control"
+        />
+      </div>
+
+      <div class="mb-3">
+        <label for="images" class="form-label">Upload up to 3 images</label>
+        <input
+          name="images"
+          id="images"
+          type="file"
+          accept="image/*"
+          class="form-control"
+          multiple
+        />
+        <div class="form-text">You can select up to three files.</div>
+      </div>
+
+      <div class="row">
+        <div class="mb-3 col-md-4">
+          <label for="price" class="form-label">Price</label>
+          <input
+            name="listing[price]"
+            placeholder="enter price"
+            class="form-control"
+            required
+          />
+          <div class="invalid-feedback">Please enter a Price</div>
+        </div>
+        <div class="mb-3 col-md-4">
+          <label for="category" class="form-label">Category</label>
+          <select name="listing[category]" class="form-select">
+            <option value="">Select category</option>
+            <option>Trending</option>
+            <option>Rooms</option>
+            <option>Iconic Cities</option>
+            <option>Mountains</option>
+            <option>Castles</option>
+            <option>Amazing Pools</option>
+            <option>Camping</option>
+            <option>Farms</option>
+            <option>Arctic</option>
+            <option>Domes</option>
+            <option>Boats</option>
+          </select>
+        </div>
+        <div class="mb-3 col-md-4">
+          <label for="country" class="form-label">Country</label>
+          <input
+            name="listing[country]"
+            placeholder="enter country"
+            type="text"
+            class="form-control"
+            required
+            data-geo="country"
+          />
+          <div class="invalid-feedback">Please enter a Country</div>
+        </div>
+      </div>
+
+      <div class="mb-3">
+        <label for="location" class="form-label">location</label>
+        <input
+          name="listing[location]"
+          placeholder="enter location"
+          type="text"
+          class="form-control"
+          required
+          data-geo="location"
+        />
+        <div class="invalid-feedback">Please enter a Location</div>
+      </div>
+
+      <div class="mb-3">
+        <div
+          id="form-map"
+          class="w-100"
+          style="height: 260px; border-radius: 8px; overflow: hidden"
+        ></div>
+        <div class="form-text">
+          Preview is approximate. Powered by OpenStreetMap.
+        </div>
+      </div>
+
+      <script>
+        window.addEventListener("load", () => {
+          const locInput = document.querySelector('[data-geo="location"]');
+          const countryInput = document.querySelector('[data-geo="country"]');
+          const mapEl = document.getElementById("form-map");
+          if (!locInput || !countryInput || !mapEl || !window.L) return;
+
+          let map, marker;
+          const ensureMap = () => {
+            if (map) return map;
+            map = L.map("form-map").setView([20.5937, 78.9629], 4);
+            L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+              maxZoom: 19,
+              attribution: "&copy; OpenStreetMap contributors",
+            }).addTo(map);
+            return map;
+          };
+
+          let timer;
+          const geocode = async () => {
+            const city = (locInput.value || "").trim();
+            const country = (countryInput.value || "").trim();
+            if (!city && !country) {
+              if (map) map.invalidateSize();
+              mapEl.innerHTML =
+                '<div class="text-muted text-center p-3">Enter location and country to preview</div>';
+              return;
+            }
+            try {
+              let url;
+              if (city && country) {
+                const params = new URLSearchParams({
+                  format: "json",
+                  city,
+                  country,
+                  limit: "1",
+                  addressdetails: "1",
+                });
+                url = `https://nominatim.openstreetmap.org/search?${params.toString()}`;
+              } else {
+                const q = `${city} ${country}`.trim();
+                const params = new URLSearchParams({
+                  format: "json",
+                  q,
+                  limit: "1",
+                });
+                url = `https://nominatim.openstreetmap.org/search?${params.toString()}`;
+              }
+              const res = await fetch(url, {
+                headers: { Accept: "application/json" },
+              });
+              const data = await res.json();
+              if (!Array.isArray(data) || data.length === 0) {
+                mapEl.innerHTML =
+                  '<div class="text-muted text-center p-3">Location not found</div>';
+                return;
+              }
+              const { lat, lon } = data[0];
+              ensureMap();
+              map.setView([parseFloat(lat), parseFloat(lon)], 13);
+              if (marker) marker.remove();
+              marker = L.marker([parseFloat(lat), parseFloat(lon)]).addTo(map);
+              const titleEl = document.querySelector(
+                'input[name="listing[title]"]'
+              );
+              const priceEl = document.querySelector(
+                'input[name="listing[price]"]'
+              );
+              const imgEl = document.querySelector(
+                'input[name="listing[image]"]'
+              );
+              const title =
+                titleEl && titleEl.value ? titleEl.value : "Listing";
+              const price = priceEl && priceEl.value ? priceEl.value : "";
+              const imgUrl = imgEl && imgEl.value ? imgEl.value : "";
+              const address = `${city}${country ? ", " + country : ""}`;
+              const content = `
+                <div style="display:flex; gap:8px; align-items:center; max-width:260px;">
+                  ${
+                    imgUrl
+                      ? `<img src="${imgUrl}" alt="preview" style="width:96px;height:72px;object-fit:cover;border-radius:6px;"/>`
+                      : ""
+                  }
+                  <div style="min-width:0;">
+                    <div style="font-weight:600;">${title}</div>
+                    <div style="color:#555; font-size:12px;">${address}</div>
+                    ${
+                      price
+                        ? `<div style=\"margin-top:4px; font-weight:600;\">₹ ${price}</div>`
+                        : ""
+                    }
+                  </div>
+                </div>`;
+              marker.bindPopup(content).openPopup();
+            } catch (e) {
+              mapEl.innerHTML =
+                '<div class="text-muted text-center p-3">Map failed to load</div>';
+            }
+          };
+
+          const schedule = () => {
+            clearTimeout(timer);
+            timer = setTimeout(geocode, 500);
+          };
+
+          locInput.addEventListener("input", schedule);
+          countryInput.addEventListener("input", schedule);
+          document
+            .querySelector('input[name="listing[title]"]')
+            .addEventListener("input", schedule);
+          document
+            .querySelector('input[name="listing[price]"]')
+            .addEventListener("input", schedule);
+          document
+            .querySelector('input[name="listing[image]"]')
+            .addEventListener("input", schedule);
+        });
+      </script>
+
+      <button class="btn btn-dark add-btn mt-3">✜ Add</button>
+      <br /><br />
+    </form>
+  </div>
+</div>

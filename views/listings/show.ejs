@@ -1,0 +1,262 @@
+<% layout("/layouts/boilerplate") %>
+<div class="row mt-3">
+  <div class="col-8 offset-3">
+    <h3><%= listing.title %></h3>
+  </div>
+  <div class="card col-6 offset-3 show-card listing-card">
+    <% const imgs = (listing.images && listing.images.length) ? listing.images :
+    [listing.image]; %>
+    <div id="listingCarousel" class="carousel slide" data-bs-ride="carousel">
+      <div class="carousel-inner">
+        <% imgs.forEach(function(img, idx){ %>
+        <div class="carousel-item <%= idx === 0 ? 'active' : '' %>">
+          <img
+            src="<%= img.url %>"
+            class="d-block w-100 show-img"
+            alt="listing_image_<%= idx %>"
+          />
+        </div>
+        <% }) %>
+      </div>
+      <% if (imgs.length > 1) { %>
+      <button
+        class="carousel-control-prev"
+        type="button"
+        data-bs-target="#listingCarousel"
+        data-bs-slide="prev"
+      >
+        <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+        <span class="visually-hidden">Previous</span>
+      </button>
+      <button
+        class="carousel-control-next"
+        type="button"
+        data-bs-target="#listingCarousel"
+        data-bs-slide="next"
+      >
+        <span class="carousel-control-next-icon" aria-hidden="true"></span>
+        <span class="visually-hidden">Next</span>
+      </button>
+      <% } %>
+    </div>
+    <div class="card-body">
+      <p class="card-text">
+       <b> Owned by
+        <i
+          ><%= listing.owner && listing.owner.username ? listing.owner.username
+          : "Unknown" %></i
+        >
+      </b>
+      </p>
+      <p class="card-text"><b>About this place:</b> <br><%= listing.description %></p>
+      <p class="card-text"><b>Price:</b>
+       &#8377; <%= listing.price.toLocaleString("en-IN") %>
+      </p>
+      <p class="card-text"><b>Location:</b> <%= listing.location %></p>
+      <p class="card-text"><b>Country:</b> <%= listing.country %></p>
+      <% if (mapQuery && mapQuery.length) { %>
+      <div class="mb-3">
+        <b>Location:</b>
+        <div
+          id="map"
+          class="w-100"
+          style="height: 360px; border-radius: 8px; overflow: hidden"
+          data-title="<%= listing.title || '' %>"
+          data-img="<%= (listing.images && listing.images.length) ? listing.images[0].url : (listing.image ? listing.image.url : '') %>"
+          data-price="<%= Number(listing.price || 0) %>"
+        ></div>
+      </div>
+      <script>
+        window.addEventListener("load", async () => {
+          try {
+            const city = `<%= (listing.location || "").trim() %>`;
+            const country = `<%= (listing.country || "").trim() %>`;
+            let url;
+            if (city && country) {
+              const params = new URLSearchParams({
+                format: "json",
+                city,
+                country,
+                limit: "1",
+                addressdetails: "1",
+              });
+              url = `https://nominatim.openstreetmap.org/search?${params.toString()}`;
+            } else {
+              const q = `${city} ${country}`.trim();
+              const params = new URLSearchParams({
+                format: "json",
+                q,
+                limit: "1",
+              });
+              url = `https://nominatim.openstreetmap.org/search?${params.toString()}`;
+            }
+            const res = await fetch(url, {
+              headers: { Accept: "application/json" },
+            });
+            const data = await res.json();
+            if (!Array.isArray(data) || data.length === 0) {
+              const el = document.getElementById("map");
+              if (el)
+                el.innerHTML =
+                  '<div class="text-muted text-center p-3">Location not found</div>';
+              return;
+            }
+            const { lat, lon, display_name } = data[0];
+            const map = L.map("map").setView(
+              [parseFloat(lat), parseFloat(lon)],
+              13
+            );
+            L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+              maxZoom: 19,
+              attribution: "&copy; OpenStreetMap contributors",
+            }).addTo(map);
+            const marker = L.marker([parseFloat(lat), parseFloat(lon)]).addTo(
+              map
+            );
+            const mapEl = document.getElementById("map");
+            const preview = {
+              imgUrl: mapEl.dataset.img || "",
+              price: Number(mapEl.dataset.price || 0),
+              title: mapEl.dataset.title || "",
+            };
+            const address = display_name || `${city}, ${country}`.trim();
+            const imgHtml = preview.imgUrl
+              ? '<img src="' +
+                preview.imgUrl +
+                '" alt="preview" style="width:96px;height:72px;object-fit:cover;border-radius:6px;"/>'
+              : "";
+            const content =
+              '<div style="display:flex; gap:8px; align-items:center; max-width:260px;">' +
+              imgHtml +
+              '<div style="min-width:0;">' +
+              '<div style="font-weight:600;">' +
+              preview.title +
+              "</div>" +
+              '<div style="color:#555; font-size:12px;">' +
+              address +
+              "</div>" +
+              '<div style="margin-top:4px; font-weight:600;">₹ ' +
+              preview.price.toLocaleString("en-IN") +
+              "</div>" +
+              "</div>" +
+              "</div>";
+            marker.bindPopup(content);
+          } catch (e) {
+            const el = document.getElementById("map");
+            if (el)
+              el.innerHTML =
+                '<div class="text-muted text-center p-3">Map failed to load</div>';
+          }
+        });
+      </script>
+      <% } %>
+    </div>
+  </div>
+
+  <br />
+
+  <% if(currUser && listing.owner._id.equals(currUser._id)) { %>
+  <div class="btns mb-2">
+    <a
+      href="/listings/<%= listing._id %>/edit"
+      class="btn btn-dark col-1.5 offset-3 edit-btn nowrap-btn"
+      ><i class="fa-solid fa-pen me-1"></i>Edit
+    </a>
+    <form method="POST" action="/listings/<%= listing._id%>?_method=DELETE">
+      <button class="btn btn-dark offset-5 nowrap-btn">
+        <i class="fa-solid fa-trash me-1"></i>Delete
+      </button>
+    </form>
+  </div>
+  <% } %>
+
+  <div class="col-8 offset-3 mb-3">
+    <hr />
+    <% if(currUser) { %>
+    <h4>leave a Review</h4>
+    <form
+      action="/listings/<%= listing.id %>/reviews"
+      method="POST"
+      novalidate
+      class="needs-validation"
+    >
+      <div class="mb-3 mt-3">
+        <label class="form-label"><b>Rating : </b></label>
+        <div
+          class="rating-stars d-inline-flex align-items-center gap-1"
+          role="radiogroup"
+          aria-label="Select rating"
+        >
+          <% for (let i = 1; i <= 5; i++) { %>
+          <input
+            type="radio"
+            class="btn-check"
+            name="review[rating]"
+            id="star<%= i %>"
+            value="<%= i %>"
+            required
+          />
+          <label class="btn p-0" for="star<%= i %>" data-value="<%= i %>">
+            <i class="fa-regular fa-star fs-5 text-warning"></i>
+          </label>
+          <% } %>
+        </div>
+      </div>
+
+      <div class="mb-3 mt-3">
+        <label for="comment" class="form-label">Comments</label>
+        <textarea
+          name="review[comment]"
+          id="comment"
+          cols="30"
+          rows="5"
+          class="form-control"
+          required
+        ></textarea>
+        <div class="invalid-feedback">please add some somments for review</div>
+      </div>
+      <button class="btn btn-outline-dark">Submit</button>
+    </form>
+    <hr />
+    <% } %>
+
+    <p><b>All Reviews</b></p>
+    <div class="row">
+      <% for(review of listing.reviews) { %>
+      <div class="card col-5 ms-3 mb-3">
+        <div class="card-body mt-2">
+          <h5 class="card-title">@<%= review.author.username %></h5>
+          <div class="d-flex align-items-center justify-content-between mb-2">
+            <div
+              class="card-text"
+              aria-label="Rating: <%= review.rating %> out of 5"
+            >
+              <% for (let i = 1; i <= 5; i++) { %>
+              <i
+                class="<%= i <= review.rating ? 'fa-solid' : 'fa-regular' %> fa-star text-warning"
+              ></i>
+              <% } %>
+            </div>
+            <p class="card-text mb-0 ms-2">
+              <%= review.createdAt.toLocaleDateString("en-IN") %>
+            </p>
+          </div>
+          <p class="card-text mb-2"><%= review.comment %></p>
+        </div>
+        <% if (currUser && review.author && review.author._id &&
+        review.author._id.equals(currUser._id)) { %>
+        <form
+          class="mb-3"
+          method="POST"
+          action="/listings/<%= listing._id %>/reviews/<%= review._id %>?_method=DELETE"
+        >
+          <button class="btn btn-sm btn-dark">
+            <i class="fa-solid fa-trash me-1"></i>Delete
+          </button>
+        </form>
+        <% } %>
+      </div>
+      <% } %>
+    </div>
+  </div>
+</div>

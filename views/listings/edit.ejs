@@ -1,0 +1,169 @@
+<% layout("/layouts/boilerplate") %>
+<div class="row mt-3">
+    <div class="col-8 offset-2">
+<h2>Edit your Listing</h2>
+<form method="POST" action="/listings/<%= listing._id %>?_method=PUT" enctype="multipart/form-data" novalidate class="needs-validation">
+  <div class="mb-3 ">
+    <label for="title" class="form-label">Title</label>
+    <input name="listing[title]" value="<%= listing.title %>" type="text" class="form-control" required />
+     <div class="valid-feedback">Title looks good!</div>
+  </div>
+  <div class="mb-3">
+    <label for="description" class="form-label">Description</label>
+  <textarea name="listing[description]" class="form-control" required><%= listing.description %></textarea>
+   <div class="invalid-feedback">Please enter a short description</div>
+  </div>
+  <div class="mb-3">
+    <label for="image" class="form-label">Image Link (optional)</label>
+  <input name="listing[image]" type="text" class="form-control" placeholder="Enter new image URL"/>
+  <div class="form-text">If provided, this will be added as another image.</div>
+  </div>
+  <div class="mb-3">
+    <% const imgs = (listing.images && listing.images.length) ? listing.images : (listing.image ? [listing.image] : []); %>
+    <% if (imgs.length) { %>
+      <label class="form-label">Existing images</label>
+      <div class="row g-3">
+        <% imgs.forEach(function(img, idx){ %>
+          <div class="col-md-4 text-center">
+            <img src="<%= img.url %>" alt="current" class="img-fluid mb-2" style="max-height: 140px; object-fit: cover; width: 100%;" />
+            <div class="form-check d-inline-block">
+              <input class="form-check-input" type="checkbox" name="deleteImages" value="<%= img.url %>" id="del_<%= idx %>">
+              <label class="form-check-label" for="del_<%= idx %>">Delete</label>
+            </div>
+          </div>
+        <% }) %>
+      </div>
+      <div class="form-text">Select images to delete, then click Edit to save.</div>
+    <% } else { %>
+      <div class="text-muted">No images</div>
+    <% } %>
+  </div>
+  <div class="mb-3">
+    <label for="images" class="form-label">Upload up to 3 images</label>
+    <input name="images" id="images" type="file" class="form-control" accept="image/*" multiple />
+    <div class="form-text">Selecting new files will replace existing images (up to 3).</div>
+  </div>
+  <div class="mb-3">
+    <div class="row">
+    <div class="mb-3 col-md-4">
+    <label for="price" class="form-label">Price</label>
+  <input name="listing[price]" value="<%= listing.price %>" type="text" class="form-control" required/>
+   <div class="invalid-feedback">Please enter a Price</div>
+  </div>
+  <div class="mb-3 col-md-4">
+    <label for="category" class="form-label">Category</label>
+    <select name="listing[category]" class="form-select">
+      <option value="">Select category</option>
+      <option <%= listing.category === 'Trending' ? 'selected' : '' %>>Trending</option>
+      <option <%= listing.category === 'Rooms' ? 'selected' : '' %>>Rooms</option>
+      <option <%= listing.category === 'Iconic Cities' ? 'selected' : '' %>>Iconic Cities</option>
+      <option <%= listing.category === 'Mountains' ? 'selected' : '' %>>Mountains</option>
+      <option <%= listing.category === 'Castles' ? 'selected' : '' %>>Castles</option>
+      <option <%= listing.category === 'Amazing Pools' ? 'selected' : '' %>>Amazing Pools</option>
+      <option <%= listing.category === 'Camping' ? 'selected' : '' %>>Camping</option>
+      <option <%= listing.category === 'Farms' ? 'selected' : '' %>>Farms</option>
+      <option <%= listing.category === 'Arctic' ? 'selected' : '' %>>Arctic</option>
+      <option <%= listing.category === 'Domes' ? 'selected' : '' %>>Domes</option>
+      <option <%= listing.category === 'Boats' ? 'selected' : '' %>>Boats</option>
+    </select>
+  </div>
+  <div class="mb-3 col-md-8">
+    <label for="country" class="form-label">Country</label>
+  <input name="listing[country]" value="<%= listing.country %>" type="text" class="form-control" required data-geo="country"/>
+    <div class="invalid-feedback">Please enter a Country</div>
+  </div>
+    </div>
+   
+  <div class="mb-3">
+    <label for="location" class="form-label">Location</label>
+  <input name="listing[location]" value="<%= listing.location %>" type="text" class="form-control" required data-geo="location"/>
+   <div class="invalid-feedback">Please enter a Location</div>
+   </div>
+
+  <div class="mb-3">
+    <div id="form-map" class="w-100" style="height: 260px; border-radius: 8px; overflow: hidden"></div>
+    <div class="form-text">Preview is approximate. Powered by OpenStreetMap.</div>
+  </div>
+  <script>
+    window.addEventListener("load", () => {
+      const locInput = document.querySelector('[data-geo="location"]');
+      const countryInput = document.querySelector('[data-geo="country"]');
+      const mapEl = document.getElementById('form-map');
+      if (!locInput || !countryInput || !mapEl || !window.L) return;
+
+      let map = L.map('form-map').setView([20.5937, 78.9629], 4);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap contributors',
+      }).addTo(map);
+      let marker;
+
+      let timer;
+      const geocode = async () => {
+        const city = (locInput.value || '').trim();
+        const country = (countryInput.value || '').trim();
+        if (!city && !country) {
+          mapEl.innerHTML = '<div class="text-muted text-center p-3">Enter location and country to preview</div>';
+          return;
+        }
+        try {
+          let url;
+          if (city && country) {
+            const params = new URLSearchParams({ format: 'json', city, country, limit: '1', addressdetails: '1' });
+            url = `https://nominatim.openstreetmap.org/search?${params.toString()}`;
+          } else {
+            const q = `${city} ${country}`.trim();
+            const params = new URLSearchParams({ format: 'json', q, limit: '1' });
+            url = `https://nominatim.openstreetmap.org/search?${params.toString()}`;
+          }
+          const res = await fetch(url, { headers: { Accept: 'application/json' }});
+          const data = await res.json();
+          if (!Array.isArray(data) || data.length === 0) {
+            mapEl.innerHTML = '<div class="text-muted text-center p-3">Location not found</div>';
+            return;
+          }
+          const { lat, lon } = data[0];
+          map.setView([parseFloat(lat), parseFloat(lon)], 13);
+          if (marker) marker.remove();
+          marker = L.marker([parseFloat(lat), parseFloat(lon)]).addTo(map);
+          const titleEl = document.querySelector('input[name="listing[title]"]');
+          const priceEl = document.querySelector('input[name="listing[price]"]');
+          const imgEl = document.querySelector('input[name="listing[image]"]');
+          const title = (titleEl && titleEl.value) ? titleEl.value : 'Listing';
+          const price = priceEl && priceEl.value ? priceEl.value : '';
+          const imgUrl = imgEl && imgEl.value ? imgEl.value : '';
+          const address = `${city}${country ? ', ' + country : ''}`;
+          const content = `
+            <div style="display:flex; gap:8px; align-items:center; max-width:260px;">
+              ${imgUrl ? `<img src="${imgUrl}" alt="preview" style="width:96px;height:72px;object-fit:cover;border-radius:6px;"/>` : ''}
+              <div style="min-width:0;">
+                <div style="font-weight:600;">${title}</div>
+                <div style="color:#555; font-size:12px;">${address}</div>
+                ${price ? `<div style=\"margin-top:4px; font-weight:600;\">₹ ${price}</div>` : ''}
+              </div>
+            </div>`;
+          marker.bindPopup(content).openPopup();
+        } catch (e) {
+          mapEl.innerHTML = '<div class="text-muted text-center p-3">Map failed to load</div>';
+        }
+      };
+
+      // initialize from existing values
+      geocode();
+
+      const schedule = () => {
+        clearTimeout(timer);
+        timer = setTimeout(geocode, 500);
+      };
+      locInput.addEventListener('input', schedule);
+      countryInput.addEventListener('input', schedule);
+      document.querySelector('input[name="listing[title]"]').addEventListener('input', schedule);
+      document.querySelector('input[name="listing[price]"]').addEventListener('input', schedule);
+      document.querySelector('input[name="listing[image]"]').addEventListener('input', schedule);
+    });
+  </script>
+  <button class="btn btn-dark edit-btn mt-3"><i class="fa-solid fa-pen me-1"></i>Edit</button>
+  <br><br>
+</form>
+    </div>
+</div>
